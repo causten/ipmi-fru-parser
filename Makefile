@@ -1,23 +1,32 @@
-LIBS += libwritefrudata.so
-libwritefrudata.so_OBJS += frup.o writefrudata.o
-libwritefrudata.so_NEEDED += libsystemd
+LIBS += libwritefrudata.so libstrgfnhandler.so 
+libwritefrudata.so_OBJS  += frup.o writefrudata.o
+libstrgfnhandler.so_OBJS += strgfnhandler.o
+
+EXES += phosphor-read-eeprom
+
+phosphor-read-eeprom_OBJS  += readeeprom.o argument.o
+phosphor-read-eeprom_EXTRA_LIBS  += writefrudata
+libstrgfnhandler.so_EXTRA_LIBS  += writefrudata
+libwritefrudata.so_NEEDED  += libsystemd
+phosphor-read-eeprom_NEEDED  += libsystemd
 
 #### -----------------------------------------------------------------------####
 #                                                                              #
 ##                       Compilare Regulas Sequi                              ##
 #                                                                              #
 #### -----------------------------------------------------------------------####
-OPTFLAGS ?= -O3 -g -pipe
+OPTFLAGS ?= -O3 -g -pipe -G -K
 CFLAGS ?= $(OPTFLAGS)
 CXXFLAGS ?= $(OPTFLAGS)
 CFLAGS += -Wall -flto -fPIC
 CXXFLAGS += --std=gnu++14 -Wall -flto -fPIC
 
 __PKG_CONFIG = $(if $1,$(shell pkg-config $2 $1))
+__EXTRA_LIB_RESOLV = $(if $1,$1)
 
 define __BUILD_EXE
-$1 : $$($1_OBJS) $$(LIBS)
-		$$(LINK.cpp) -o $$@ $$^ $(call __PKG_CONFIG,$($1_NEEDED),--libs)
+$1 : $$($1_OBJS) | $$(LIBS)
+		$$(LINK.cpp) -o $$@ $$^ $(call __EXTRA_LIB_RESOLV,$(addprefix -l,$($1_EXTRA_LIBS))) -L. $(call __PKG_CONFIG,$($1_NEEDED),--libs) 
 
 $(eval CXXFLAGS += $(call __PKG_CONFIG,$($1_NEEDED),--cflags))
 
@@ -27,8 +36,8 @@ endef
 $(foreach exe,$(EXES),$(eval $(call __BUILD_EXE,$(exe))))
 
 define __BUILD_LIB
-$1 : $$($1_OBJS)
-		$$(LINK.cpp) -shared -o $$@ $$^ $(call __PKG_CONFIG,$($1_NEEDED),--libs)
+$1 : $$($1_OBJS) | $$(addsuffix .so,$$(addprefix lib,$$($1_EXTRA_LIBS)))
+		$$(LINK.cpp) -fPIC -shared -o $$@ $$^ $(call __EXTRA_LIB_RESOLV,$(addprefix -l,$($1_EXTRA_LIBS))) -L. $(call __PKG_CONFIG,$($1_NEEDED),--libs) 
 
 $(eval CXXFLAGS += $(call __PKG_CONFIG,$($1_NEEDED),--cflags))
 
